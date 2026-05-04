@@ -167,6 +167,7 @@ async function loadData(date) {
     const errEl = document.getElementById('errorState');
     errEl.textContent = fmtDate(date) + ' 데이터가 없습니다. (아직 업데이트 전이거나 설정을 확인해주세요)';
     show('errorState');
+    document.getElementById('nextBtn').disabled = date >= new Date().toISOString().slice(0,10);
   }
 }
 
@@ -195,7 +196,8 @@ function renderAll() {
 
 function renderNews(lang) {
   const panel = document.getElementById('tab-' + lang);
-  const newsData = data[lang] || {};
+  const dataKey = lang === 'ko' ? 'korean' : 'english';
+  const newsData = data[dataKey] || {};
   let h = '';
   for (const [key, labels] of Object.entries(CATS)) {
     const text = newsData[key];

@@ -92,6 +92,12 @@ main{padding:24px 0 60px;}
 .source-link:hover{text-decoration:underline;}
 .state-msg{text-align:center;padding:60px 20px;color:#aaa;font-size:15px;}
 @media(max-width:540px){.tab-btn{padding:12px 12px;font-size:13px;}.news-text{font-size:14px;}}
+/* ── Tooltip highlights ── */
+.hl{border-bottom:1.5px dotted #2563eb;cursor:help;position:relative;display:inline;}
+.hl-ko{border-bottom-color:#9333ea;}
+.hl::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:6px 10px;border-radius:7px;font-size:12px;line-height:1.5;white-space:normal;max-width:220px;min-width:80px;text-align:center;z-index:200;pointer-events:none;visibility:hidden;opacity:0;transition:opacity .15s,visibility .15s;word-break:keep-all;}
+.hl::before{content:'';position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1a1a;z-index:200;pointer-events:none;visibility:hidden;opacity:0;transition:opacity .15s,visibility .15s;}
+.hl:hover::after,.hl:hover::before,.hl.tip-open::after,.hl.tip-open::before{visibility:visible;opacity:1;}
 </style>
 </head>
 <body>
@@ -146,6 +152,73 @@ const CATS = {
   tech:          { ko:'💡 기술·과학',   en:'💡 Tech & Science' }
 };
 
+// ─── 한국어 전문용어 툴팁 사전 ───────────────────────────────────
+const KO_TERMS = [
+  // 경제·금융
+  { word:'시가총액',    tip:'기업 전체 주식의 시장가치 (주가 × 발행주식수)' },
+  { word:'영업이익',    tip:'본업으로 벌어들인 이익 (매출 − 원가 − 판관비)' },
+  { word:'영업손실',    tip:'본업에서 비용이 매출을 초과해 발생한 손실' },
+  { word:'순이익',      tip:'세금·이자 등 모든 비용을 뺀 최종 이익' },
+  { word:'매출액',      tip:'상품·서비스 판매로 얻은 총 수입' },
+  { word:'성과급',      tip:'목표 달성 시 지급하는 특별 보너스' },
+  { word:'기준금리',    tip:'중앙은행이 설정하는 기준이 되는 정책 금리' },
+  { word:'금리인상',    tip:'중앙은행이 기준금리를 올리는 조치' },
+  { word:'금리인하',    tip:'중앙은행이 기준금리를 내리는 조치' },
+  { word:'양도소득세',  tip:'자산(부동산·주식 등) 양도 시 발생한 이익에 부과하는 세금' },
+  { word:'다주택자',    tip:'주택을 2채 이상 소유한 사람' },
+  { word:'중과세',      tip:'일반세율보다 훨씬 높은 세율을 적용하는 것' },
+  { word:'중과',        tip:'일반세율보다 높은 세율을 적용하는 것' },
+  { word:'공급망',      tip:'원자재→생산→유통→소비 전체 흐름 (Supply Chain)' },
+  { word:'무역수지',    tip:'수출액에서 수입액을 뺀 차이 (흑자/적자)' },
+  { word:'경상수지',    tip:'상품·서비스·소득 등 대외 거래의 종합 수지' },
+  { word:'인플레이션',  tip:'물가가 지속적으로 오르는 현상' },
+  { word:'디플레이션',  tip:'물가가 지속적으로 내리는 현상' },
+  { word:'스태그플레이션', tip:'경기침체와 인플레이션이 동시에 나타나는 현상' },
+  { word:'GDP',         tip:'국내총생산 — 일정 기간 국내에서 생산된 재화·서비스의 총가치' },
+  { word:'코스피',      tip:'한국거래소 유가증권시장 종합주가지수' },
+  { word:'코스닥',      tip:'한국 벤처·중소기업 중심의 주식시장 지수' },
+  { word:'환율',        tip:'두 나라 통화 간 교환 비율' },
+  { word:'원달러환율',  tip:'원화와 미국 달러의 교환 비율' },
+  // 정치·사회
+  { word:'탄핵',        tip:'고위 공직자의 위법 행위에 대해 의회가 파면 절차를 밟는 것' },
+  { word:'국무회의',    tip:'대통령 주재로 주요 국정 사안을 심의하는 최고 행정 회의' },
+  { word:'국회본회의',  tip:'국회의원 전원이 참여하는 국회의 최고 의결 기관' },
+  { word:'상임위',      tip:'상임위원회 — 국회 내 분야별 전문 심사 위원회' },
+  { word:'여당',        tip:'현재 정권을 이끄는 집권 정당' },
+  { word:'야당',        tip:'현재 정권에 반대하는 정당' },
+  { word:'총선',        tip:'국회의원을 뽑는 전국 선거 (총선거)' },
+  { word:'지방선거',    tip:'광역·기초 단체장과 의원을 뽑는 지방자치 선거' },
+  { word:'국정조사',    tip:'국회가 국정 특정 사안을 직접 조사하는 제도' },
+  { word:'검찰',        tip:'범죄 수사·공소 제기를 담당하는 국가 기관' },
+  { word:'특검',        tip:'특별검사 — 정치적 중립성을 위해 따로 임명하는 수사 검사' },
+  // 노동
+  { word:'총파업',      tip:'모든 조합원이 참가하는 전면적인 파업' },
+  { word:'파업',        tip:'임금·조건 개선을 위해 집단으로 업무를 중단하는 행동' },
+  { word:'노조',        tip:'노동조합 — 근로자 권익을 대표하는 단체' },
+  { word:'노사',        tip:'노동자(노조)와 사용자(경영진)를 아우르는 말' },
+  { word:'단체교섭',    tip:'노조와 사용자가 임금·근로조건 등을 협의하는 과정' },
+  { word:'최저임금',    tip:'법으로 정한 시간당 최소 임금 수준' },
+  // 기술·과학
+  { word:'반도체',      tip:'전기 전도성을 조절하는 소자 — 현대 전자기기의 핵심' },
+  { word:'HBM',         tip:'고대역폭 메모리 — AI 가속기용 초고속 반도체' },
+  { word:'파운드리',    tip:'다른 기업의 설계로 반도체를 위탁 생산하는 공장' },
+  { word:'AI 반도체',   tip:'인공지능 연산에 특화된 고성능 칩 (GPU·NPU 등)' },
+  { word:'GPU',         tip:'그래픽·AI 병렬 연산에 특화된 처리 장치' },
+  { word:'LLM',         tip:'대규모 언어 모델 — ChatGPT 같은 AI의 핵심 기술' },
+  { word:'생성형 AI',   tip:'텍스트·이미지·영상 등을 새로 만들어내는 인공지능' },
+  { word:'클라우드',    tip:'인터넷을 통해 컴퓨팅 자원을 제공하는 서비스' },
+  // 외교·국제
+  { word:'호르무즈 해협', tip:'전 세계 석유 약 20%가 통과하는 전략적 해협' },
+  { word:'G7',          tip:'미국·영국·독일·프랑스·일본·이탈리아·캐나다의 선진 7개국 모임' },
+  { word:'OPEC',        tip:'석유 생산량을 협의하는 주요 산유국 기구' },
+  { word:'제재',        tip:'특정 국가·개인에 무역·금융 등을 제한하는 국제 조치' },
+  { word:'관세',        tip:'수입품에 부과하는 세금으로 국내 산업 보호에 사용' },
+  // 보건
+  { word:'한타바이러스', tip:'설치류를 통해 전파, 출혈열·폐증후군 유발 가능한 바이러스' },
+  { word:'감염병',      tip:'병원체가 사람 사이에 전파되는 질환' },
+  { word:'집단면역',    tip:'인구 대다수가 면역을 가져 감염이 자연히 억제되는 상태' },
+];
+
 let currentDate = new Date().toISOString().slice(0,10);
 let data = null;
 
@@ -198,10 +271,16 @@ function renderNews(lang) {
   const panel = document.getElementById('tab-' + lang);
   const dataKey = lang === 'ko' ? 'korean' : 'english';
   const newsData = data[dataKey] || {};
+  const isKo = lang === 'ko';
+  // Build term list: English uses vocab from learning data, Korean uses static dictionary
+  const terms = isKo ? KO_TERMS : ((data.learning && data.learning.vocabulary) || []).map(v => ({
+    word: v.word,
+    tip: '[' + v.pos + '] ' + v.korean
+  }));
   let h = '';
   for (const [key, labels] of Object.entries(CATS)) {
     const text = newsData[key];
-    if (text) h += '<div class="news-card"><div class="news-cat">' + esc(labels[lang]) + '</div><p class="news-text">' + esc(text) + '</p></div>';
+    if (text) h += '<div class="news-card"><div class="news-cat">' + esc(labels[lang]) + '</div><p class="news-text">' + applyTooltips(text, terms, isKo) + '</p></div>';
   }
   if (data.sources && data.sources.length) {
     h += '<div class="sources"><div class="sources-label">Sources</div><div class="sources-list">';
@@ -337,6 +416,44 @@ function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function escAttr(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Wrap matched vocabulary / terms with dotted-underline tooltip spans
+function applyTooltips(text, terms, isKo) {
+  if (!terms || !terms.length) return esc(text);
+  // Sort longest first so "총파업" matches before "파업"
+  const sorted = [...terms].sort((a, b) => b.word.length - a.word.length);
+  const escapedPats = sorted.map(t => t.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  // Korean: no word boundaries (Unicode); English: \b boundaries, case-insensitive
+  const flags = isKo ? 'g' : 'gi';
+  const pat = isKo
+    ? '(' + escapedPats.join('|') + ')'
+    : '\\b(' + escapedPats.join('|') + ')\\b';
+  const regex = new RegExp(pat, flags);
+  // Build lookup map
+  const lookup = {};
+  sorted.forEach(t => { lookup[isKo ? t.word : t.word.toLowerCase()] = t; });
+  const cls = isKo ? 'hl hl-ko' : 'hl';
+  let result = '';
+  let last = 0;
+  let m;
+  regex.lastIndex = 0;
+  while ((m = regex.exec(text)) !== null) {
+    result += esc(text.slice(last, m.index));
+    const matched = m[0];
+    const key = isKo ? matched : matched.toLowerCase();
+    const term = lookup[key];
+    const tip = term ? escAttr(term.tip) : '';
+    result += '<span class="' + cls + '" data-tip="' + tip + '" onclick="this.classList.toggle(\'tip-open\')">' + esc(matched) + '</span>';
+    last = m.index + matched.length;
+  }
+  result += esc(text.slice(last));
+  return result;
+}
+
 function show(id) { document.getElementById(id).style.display = 'block'; }
 function hide(id) { document.getElementById(id).style.display = 'none'; }
 
@@ -344,3 +461,4 @@ loadData(currentDate);
 </script>
 </body>
 </html>
+

@@ -315,6 +315,48 @@ const EN_TERMS = [
   { word:'accountability',    tip:'책임, 책임감' },
   { word:'transparency',      tip:'투명성' },
   { word:'whistleblower',     tip:'내부 고발자' },
+  // Additional words commonly found in Korean news (English edition)
+  { word:'reinstate',         tip:'(폐지됐던 것을) 복원하다, 다시 시행하다' },
+  { word:'surcharge',         tip:'추가 부과금, 할증료' },
+  { word:'capital gains tax', tip:'양도소득세 — 자산 매각 차익에 부과하는 세금' },
+  { word:'multi-home',        tip:'다주택의 (주택을 여러 채 소유한)' },
+  { word:'market capitalization', tip:'시가총액 — 주가 × 발행주식수' },
+  { word:'trillion won',      tip:'조 원 (한국 화폐 단위의 1조)' },
+  { word:'operating profit',  tip:'영업이익 — 본업에서 벌어들인 이익' },
+  { word:'general strike',    tip:'총파업 — 전 분야 노동자의 전면 파업' },
+  { word:'high-bandwidth memory', tip:'고대역폭 메모리 (HBM) — AI 가속기용 초고속 반도체' },
+  { word:'memory chip',       tip:'메모리 반도체 (DRAM·NAND 등)' },
+  { word:'supply chain',      tip:'공급망 — 원자재→생산→유통→소비 흐름' },
+  { word:'labor unrest',      tip:'노사 불안, 노동 불안정 상황' },
+  { word:'outbreak',          tip:'(질병·사건의) 발생, 발발' },
+  { word:'crew member',       tip:'선원, 승무원' },
+  { word:'crude oil',         tip:'원유' },
+  { word:'per barrel',        tip:'배럴당 (석유 거래 단위)' },
+  { word:'per gallon',        tip:'갤런당 (미국 연료 용량 단위, 약 3.79L)' },
+  { word:'interest rate',     tip:'이자율, 금리' },
+  { word:'central bank',      tip:'중앙은행 (한국: 한국은행, 미국: 연준)' },
+  { word:'record high',       tip:'사상 최고치' },
+  { word:'record low',        tip:'사상 최저치' },
+  { word:'fiscal year',       tip:'회계연도' },
+  { word:'trade war',         tip:'무역 전쟁 (국가 간 관세 보복 경쟁)' },
+  { word:'export ban',        tip:'수출 금지 조치' },
+  { word:'threat',            tip:'위협, 협박' },
+  { word:'threaten',          tip:'위협하다, ~할 것이라고 경고하다' },
+  { word:'demand',            tip:'요구하다; 수요' },
+  { word:'allocate',          tip:'배분하다, 할당하다' },
+  { word:'bonus',             tip:'보너스, 성과급' },
+  { word:'escalate',          tip:'고조되다, 확대되다' },
+  { word:'tension',           tip:'긴장, 갈등' },
+  { word:'confirmed',         tip:'확인된, 공식 확정된' },
+  { word:'suspected',         tip:'의심되는, 혐의를 받는' },
+  { word:'vessel',            tip:'선박, 배' },
+  { word:'explosion',         tip:'폭발' },
+  { word:'admission',         tip:'입장; 입장료; 인정' },
+  { word:'discounted',        tip:'할인된' },
+  { word:'theme park',        tip:'테마파크' },
+  { word:'public holiday',    tip:'공휴일' },
+  { word:'national holiday',  tip:'국가 공휴일' },
+  { word:'closed',            tip:'(기관이) 문을 닫은, 휴무인' },
 ];
 
 // ─── 한국어 전문용어 툴팁 사전 ───────────────────────────────────
@@ -596,13 +638,13 @@ function applyTooltips(text, terms, isKo) {
   // Sort longest first so "총파업" matches before "파업"
   const sorted = [...terms].sort((a, b) => b.word.length - a.word.length);
   const escapedPats = sorted.map(t => t.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  // Korean: no word boundaries (Unicode); English: \b boundaries, case-insensitive
+  // Korean: no word boundaries (Unicode); English: \b + optional suffix to catch plurals/conjugations
   const flags = isKo ? 'g' : 'gi';
   const pat = isKo
     ? '(' + escapedPats.join('|') + ')'
-    : '\\b(' + escapedPats.join('|') + ')\\b';
+    : '\\b(' + escapedPats.join('|') + ")(?:s|es|'s|d|ed|ing|r|rs|ly|tion|tions)?\\b";
   const regex = new RegExp(pat, flags);
-  // Build lookup map
+  // Build lookup map by base form (m[1] for English, m[0] for Korean)
   const lookup = {};
   sorted.forEach(t => { lookup[isKo ? t.word : t.word.toLowerCase()] = t; });
   const cls = isKo ? 'hl hl-ko' : 'hl';
@@ -612,9 +654,9 @@ function applyTooltips(text, terms, isKo) {
   regex.lastIndex = 0;
   while ((m = regex.exec(text)) !== null) {
     result += esc(text.slice(last, m.index));
-    const matched = m[0];
-    const key = isKo ? matched : matched.toLowerCase();
-    const term = lookup[key];
+    const matched = m[0];                                    // full match incl. suffix
+    const baseKey = isKo ? matched : m[1].toLowerCase();    // base word for lookup
+    const term = lookup[baseKey];
     const tip = term ? escAttr(term.tip) : '';
     result += '<span class="' + cls + '" data-tip="' + tip + '" onclick="this.classList.toggle(\'tip-open\')">' + esc(matched) + '</span>';
     last = m.index + matched.length;

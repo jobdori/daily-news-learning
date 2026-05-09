@@ -565,13 +565,40 @@ const KO_TERMS = [
   { word:'집단면역',    tip:'인구 대다수가 면역을 가져 감염이 자연히 억제되는 상태' },
 ];
 
-let currentDate = new Date().toISOString().slice(0,10);
+// ── 날짜 헬퍼 (로컬 시간 기준, 한국 시간대 정확) ──────────────
+function localDateStr(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+function addDays(dateStr, n) {
+  const p = dateStr.split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2]); // 로컬 생성자 사용
+  d.setDate(d.getDate() + n);
+  return localDateStr(d);
+}
+function getToday() { return localDateStr(); }
+
+let currentDate = getToday();
 let data = null;
 let _navDir = 0;
 
+function updateNavButtons() {
+  const onToday = currentDate >= getToday();
+  document.getElementById('nextBtn').disabled  = onToday;
+  document.getElementById('todayBtn').disabled = onToday;
+}
+
 function goToday() {
-  currentDate = new Date().toISOString().slice(0,10);
   _navDir = 0;
+  currentDate = getToday();
+  loadData(currentDate);
+}
+
+function changeDate(delta) {
+  _navDir = delta;
+  currentDate = addDays(currentDate, delta);
   loadData(currentDate);
 }
 
@@ -583,248 +610,35 @@ async function loadData(date) {
     const res = await fetch(url + '?t=' + Date.now());
     if (!res.ok) throw new Error(res.status);
     data = await res.json();
+    if (!data.korean && !data.english) throw new Error('invalid');
     currentDate = data.date || date;
     renderAll();
     hide('loadingState'); show('contentArea');
     document.getElementById('dateDisplay').textContent = fmtDate(currentDate);
-    const _today = new Date().toISOString().slice(0,10);
-    document.getElementById('nextBtn').disabled = currentDate >= _today;
-    document.getElementById('todayBtn').disabled = currentDate >= _today;
+    updateNavButtons();
   } catch(e) {
-    const today = new Date().toISOString().slice(0,10);
-    // 앞으로 탐색 중 에러 → 오늘 이전이면 다음 날 자동 시도
+    const today = getToday();
+    // ① 앞으로 탐색 중 에러 → 오늘 이전이면 다음 날 자동 시도
     if (_navDir > 0 && date < today) {
-      const d = new Date(date + 'T00:00:00');
-      d.setDate(d.getDate() + 1);
-      currentDate = d.toISOString().slice(0,10);
+      currentDate = addDays(date, 1);
+      loadData(currentDate);
+      return;
+    }
+    // ② 초기 로드(오늘)가 실패하면 어제 시도
+    if (_navDir === 0 && date === today) {
+      _navDir = -1;
+      currentDate = addDays(date, -1);
       loadData(currentDate);
       return;
     }
     hide('loadingState');
-    const errEl = document.getElementById('errorState');
-    errEl.textContent = fmtDate(date) + ' 데이터가 없습니다. (아직 업데이트 전이거나 설정을 확인해주세요)';
+    document.getElementById('errorState').textContent =
+      fmtDate(date) + ' 데이터가 없습니다. (아직 업데이트 전이거나 설정을 확인해주세요)';
     show('errorState');
-    document.getElementById('nextBtn').disabled = date >= today;
+    document.getElementById('nextBtn').disabled  = date >= today;
+    document.getElementById('todayBtn').disabled = false; // 에러 상태에선 항상 오늘로 갈 수 있게
   }
 }
-
-function fmtDate(d) {
-  const p = d.split('-');
-  return p[0] + '년 ' + parseInt(p[1]) + '월 ' + parseInt(p[2]) + '일';
-}
-
-function changeDate(delta) {
-  _navDir = delta;
-  const d = new Date(currentDate + 'T00:00:00');
-  d.setDate(d.getDate() + delta);
-  currentDate = d.toISOString().slice(0,10);
-  loadData(currentDate);
-}
-
-function switchTab(tab) {
-  document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  document.getElementById('btn-' + tab).classList.add('active');
-}
-
-function renderAll() {
-  renderNews('ko'); renderNews('en'); renderLearning();
-}
-
-function renderNews(lang) {
-  const panel = document.getElementById('tab-' + lang);
-  const dataKey = lang === 'ko' ? 'korean' : 'english';
-  const newsData = data[dataKey] || {};
-  const isKo = lang === 'ko';
-  // English: merge today's learning vocab (higher priority) + static EN_TERMS dictionary
-  // Korean: use static KO_TERMS dictionary
-  const learnVocab = (!isKo && data.learning && data.learning.vocabulary)
-    ? data.learning.vocabulary.map(v => ({ word: v.word, tip: '[' + v.pos + '] ' + v.korean }))
-    : [];
-  // learnVocab words take priority — exclude duplicates from EN_TERMS
-  const learnWords = new Set(learnVocab.map(t => t.word.toLowerCase()));
-  const filteredEn = EN_TERMS.filter(t => !learnWords.has(t.word.toLowerCase()));
-  const terms = isKo ? KO_TERMS : [...learnVocab, ...filteredEn];
-  let h = '';
-  for (const [key, labels] of Object.entries(CATS)) {
-    const text = newsData[key];
-    if (text) h += '<div class="news-card"><div class="news-cat">' + esc(labels[lang]) + '</div><p class="news-text">' + applyTooltips(text, terms, isKo) + '</p></div>';
-  }
-  if (data.sources && data.sources.length) {
-    h += '<div class="sources"><div class="sources-label">Sources</div><div class="sources-list">';
-    data.sources.forEach(s => { h += '<a href="' + esc(s.url) + '" target="_blank" rel="noopener" class="source-link">' + esc(s.title) + '</a>'; });
-    h += '</div></div>';
-  }
-  panel.innerHTML = h;
-}
-
-function renderLearning() {
-  const panel = document.getElementById('tab-learn');
-  const L = data.learning || {};
-  let h = '';
-
-  if (L.vocabulary && L.vocabulary.length) {
-    h += '<div class="section-label">핵심 어휘 — Key Vocabulary</div>';
-    h += '<div class="section-hint">카드를 클릭하면 한국어 뜻과 예문이 나와요</div>';
-    L.vocabulary.forEach(v => {
-      h += '<div class="vocab-card" onclick="this.classList.toggle(\'open\')">';
-      h += '<div class="vocab-front"><div><span class="vocab-word">' + esc(v.word) + '</span><span class="vocab-badge">' + esc(v.pos) + '</span></div><span class="vocab-arrow">▾</span></div>';
-      h += '<div class="vocab-back"><div class="vocab-ko">뜻: <strong>' + esc(v.korean) + '</strong></div><div class="vocab-example">' + esc(v.example) + '</div></div>';
-      h += '</div>';
-    });
-  }
-
-  if (L.sentences && L.sentences.length) {
-    h += '<div class="section-label" style="margin-top:22px;">문장 구조 분석 — Sentence Structure</div>';
-    h += '<div class="section-hint">클릭하면 구조 설명이 펼쳐져요</div>';
-    L.sentences.forEach(s => {
-      h += '<div class="sent-card" onclick="this.classList.toggle(\'open\')">';
-      h += '<div class="sent-front"><p class="sent-text">"' + esc(s.sentence) + '"</p><span class="sent-arrow">▾</span></div>';
-      h += '<div class="sent-detail"><div><b>구조:</b> ' + esc(s.structure) + '</div><div style="margin-top:5px;"><b>포인트:</b> ' + esc(s.point) + '</div>';
-      if (s.similar) h += '<div class="sent-similar">유사 문장: "' + esc(s.similar) + '"</div>';
-      h += '</div></div>';
-    });
-  }
-
-  if (L.expressions && L.expressions.length) {
-    h += '<div class="section-label" style="margin-top:22px;">뉴스 단골 표현 — News Expressions</div>';
-    L.expressions.forEach((e, i) => {
-      h += '<div class="expr-card">';
-      h += '<div class="expr-phrase">' + esc(e.expr) + '</div>';
-      h += '<div class="expr-meaning">' + esc(e.meaning) + ' — ' + esc(e.usage) + '</div>';
-      h += '<button class="expr-reveal" onclick="toggleEx(this)">예문 보기 ▾</button>';
-      h += '<div class="expr-example">' + esc(e.example) + '</div>';
-      h += '</div>';
-    });
-  }
-
-  if (L.challenge) {
-    const ch = L.challenge;
-    h += '<div class="section-label" style="margin-top:22px;">영작 챌린지 — Writing Challenge</div>';
-    h += '<div class="challenge-card">';
-    h += '<div class="challenge-q">아래 문장을 영어로 작성해보세요</div>';
-    h += '<div class="challenge-ko">' + esc(ch.korean) + '</div>';
-    h += '<textarea class="challenge-input" id="challengeInput" placeholder="여기에 영어로 작성하세요..."></textarea>';
-    h += '<div class="submit-row">';
-    h += '<button class="submit-btn" id="submitBtn" onclick="submitAnswer()">Claude에게 피드백 받기 ↗</button>';
-    h += '<button class="ans-reveal-btn" onclick="toggleAnswer(this)">모범 답안 보기 ▾</button>';
-    h += '<span class="loading-msg" id="loadingMsg">Claude가 검토 중...</span>';
-    h += '</div>';
-    h += '<div class="answer-box" id="answerBox"><div class="answer-sentence">' + esc(ch.answer) + '</div><div class="answer-explain">' + esc(ch.explanation) + '</div></div>';
-    h += '<div class="fb-box" id="fbBox"></div>';
-    h += '</div>';
-  }
-
-  panel.innerHTML = h;
-}
-
-function toggleEx(btn) {
-  const box = btn.nextElementSibling;
-  box.classList.toggle('show');
-  btn.textContent = box.classList.contains('show') ? '예문 닫기 ▴' : '예문 보기 ▾';
-}
-
-function toggleAnswer(btn) {
-  const box = document.getElementById('answerBox');
-  box.classList.toggle('show');
-  btn.textContent = box.classList.contains('show') ? '모범 답안 닫기 ▴' : '모범 답안 보기 ▾';
-}
-
-async function submitAnswer() {
-  const input = document.getElementById('challengeInput');
-  const submitBtn = document.getElementById('submitBtn');
-  const loadingMsg = document.getElementById('loadingMsg');
-  const fbBox = document.getElementById('fbBox');
-  const userAnswer = input.value.trim();
-
-  if (!userAnswer) {
-    input.style.borderColor = '#ef4444';
-    input.focus();
-    setTimeout(() => { input.style.borderColor = ''; }, 2000);
-    return;
-  }
-
-  submitBtn.disabled = true;
-  loadingMsg.style.display = 'inline';
-  fbBox.className = 'fb-box';
-
-  try {
-    const ch = data.learning.challenge;
-    const res = await fetch(CONFIG.FEEDBACK_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: ch.korean, userAnswer, answer: ch.answer, explanation: ch.explanation })
-    });
-    if (!res.ok) throw new Error('Network error');
-    const fb = await res.json();
-    renderFeedback(fbBox, fb, userAnswer);
-  } catch(e) {
-    fbBox.className = 'fb-box show wrong';
-    fbBox.innerHTML = '<div class="fb-head"><div class="fb-verdict">피드백을 불러오지 못했습니다</div></div><div class="fb-sec"><div class="fb-sec-text">잠시 후 다시 시도해주세요.</div></div>';
-  } finally {
-    submitBtn.disabled = false;
-    loadingMsg.style.display = 'none';
-  }
-}
-
-function renderFeedback(box, fb, userAnswer) {
-  const ok = fb.correct !== false;
-  const score = Math.round(fb.score || 0);
-  box.className = 'fb-box show ' + (ok ? 'correct' : 'wrong');
-  let h = '<div class="fb-head"><div class="fb-score">' + score + '점</div><div class="fb-verdict">' + (ok ? '잘 했어요!' : '조금 더 다듬어봐요') + '</div></div>';
-  if (fb.strengths)    h += '<div class="fb-sec"><div class="fb-sec-title">잘한 점</div><div class="fb-sec-text">' + esc(fb.strengths) + '</div></div>';
-  if (fb.improvements) h += '<div class="fb-sec"><div class="fb-sec-title">개선점</div><div class="fb-sec-text">' + esc(fb.improvements) + '</div></div>';
-  if (fb.betterVersion && fb.betterVersion.trim() !== userAnswer) h += '<div class="fb-sec"><div class="fb-sec-title">더 나은 표현</div><div class="fb-sec-text fb-better">' + esc(fb.betterVersion) + '</div></div>';
-  if (fb.explanation)  h += '<div class="fb-sec"><div class="fb-sec-title">문법 포인트</div><div class="fb-sec-text">' + esc(fb.explanation) + '</div></div>';
-  box.innerHTML = h;
-  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function esc(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function escAttr(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-// Wrap matched vocabulary / terms with dotted-underline tooltip spans
-function applyTooltips(text, terms, isKo) {
-  if (!terms || !terms.length) return esc(text);
-  // Sort longest first so "총파업" matches before "파업"
-  const sorted = [...terms].sort((a, b) => b.word.length - a.word.length);
-  const escapedPats = sorted.map(t => t.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  // Korean: no word boundaries (Unicode); English: \b + optional suffix to catch plurals/conjugations
-  const flags = isKo ? 'g' : 'gi';
-  const pat = isKo
-    ? '(' + escapedPats.join('|') + ')'
-    : '\\b(' + escapedPats.join('|') + ")(?:s|es|'s|d|ed|ing|r|rs|ly|tion|tions)?\\b";
-  const regex = new RegExp(pat, flags);
-  // Build lookup map by base form (m[1] for English, m[0] for Korean)
-  const lookup = {};
-  sorted.forEach(t => { lookup[isKo ? t.word : t.word.toLowerCase()] = t; });
-  const cls = isKo ? 'hl hl-ko' : 'hl';
-  let result = '';
-  let last = 0;
-  let m;
-  regex.lastIndex = 0;
-  while ((m = regex.exec(text)) !== null) {
-    result += esc(text.slice(last, m.index));
-    const matched = m[0];                                    // full match incl. suffix
-    const baseKey = isKo ? matched : m[1].toLowerCase();    // base word for lookup
-    const term = lookup[baseKey];
-    const tip = term ? escAttr(term.tip) : '';
-    result += '<span class="' + cls + '" data-tip="' + tip + '" onclick="this.classList.toggle(\'tip-open\')">' + esc(matched) + '</span>';
-    last = m.index + matched.length;
-  }
-  result += esc(text.slice(last));
-  return result;
-}
-
-function show(id) { document.getElementById(id).style.display = 'block'; }
-function hide(id) { document.getElementById(id).style.display = 'none'; }
 
 loadData(currentDate);
 </script>

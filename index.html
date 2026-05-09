@@ -769,7 +769,7 @@ function toggleAnswer(btn) {
   btn.textContent = box.classList.contains('show') ? '모범 답안 닫기 ▴' : '모범 답안 보기 ▾';
 }
 
-async async function submitAnswer(idx) {
+async function submitAnswer(idx) {
   idx = idx || 0;
   const input     = document.getElementById('cInput-'   + idx);
   const submitBtn = document.getElementById('cSubmit-'  + idx);

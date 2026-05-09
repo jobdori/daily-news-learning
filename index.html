@@ -15,6 +15,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .date-btn{background:none;border:1px solid #e8e8e4;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;color:#666;}
 .date-btn:hover{background:#f5f5f0;}
 .date-btn:disabled{opacity:.35;cursor:not-allowed;}
+#todayBtn{background:#1a1a1a;color:#fff;border-color:#1a1a1a;}
+#todayBtn:hover{background:#333;border-color:#333;}
 .current-date{font-size:13px;font-weight:500;min-width:120px;text-align:center;}
 .tabs{background:#fff;border-bottom:1px solid #e8e8e4;position:sticky;top:0;z-index:10;}
 .tab-list{display:flex;max-width:760px;margin:0 auto;padding:0 20px;}
@@ -109,6 +111,7 @@ main{padding:24px 0 60px;}
       <button class="date-btn" onclick="changeDate(-1)" title="이전 날">&#8592;</button>
       <span class="current-date" id="dateDisplay">불러오는 중...</span>
       <button class="date-btn" id="nextBtn" onclick="changeDate(1)" title="다음 날">&#8594;</button>
+      <button class="date-btn" id="todayBtn" onclick="goToday()" title="오늘로">오늘</button>
     </div>
   </div>
 </header>
@@ -564,6 +567,13 @@ const KO_TERMS = [
 
 let currentDate = new Date().toISOString().slice(0,10);
 let data = null;
+let _navDir = 0;
+
+function goToday() {
+  currentDate = new Date().toISOString().slice(0,10);
+  _navDir = 0;
+  loadData(currentDate);
+}
 
 async function loadData(date) {
   show('loadingState'); hide('contentArea'); hide('errorState');
@@ -577,13 +587,24 @@ async function loadData(date) {
     renderAll();
     hide('loadingState'); show('contentArea');
     document.getElementById('dateDisplay').textContent = fmtDate(currentDate);
-    document.getElementById('nextBtn').disabled = currentDate >= new Date().toISOString().slice(0,10);
+    const _today = new Date().toISOString().slice(0,10);
+    document.getElementById('nextBtn').disabled = currentDate >= _today;
+    document.getElementById('todayBtn').disabled = currentDate >= _today;
   } catch(e) {
+    const today = new Date().toISOString().slice(0,10);
+    // 앞으로 탐색 중 에러 → 오늘 이전이면 다음 날 자동 시도
+    if (_navDir > 0 && date < today) {
+      const d = new Date(date + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      currentDate = d.toISOString().slice(0,10);
+      loadData(currentDate);
+      return;
+    }
     hide('loadingState');
     const errEl = document.getElementById('errorState');
     errEl.textContent = fmtDate(date) + ' 데이터가 없습니다. (아직 업데이트 전이거나 설정을 확인해주세요)';
     show('errorState');
-    document.getElementById('nextBtn').disabled = date >= new Date().toISOString().slice(0,10);
+    document.getElementById('nextBtn').disabled = date >= today;
   }
 }
 
@@ -593,6 +614,7 @@ function fmtDate(d) {
 }
 
 function changeDate(delta) {
+  _navDir = delta;
   const d = new Date(currentDate + 'T00:00:00');
   d.setDate(d.getDate() + delta);
   currentDate = d.toISOString().slice(0,10);

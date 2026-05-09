@@ -565,6 +565,10 @@ const KO_TERMS = [
   { word:'집단면역',    tip:'인구 대다수가 면역을 가져 감염이 자연히 억제되는 상태' },
 ];
 
+// ── DOM 헬퍼 ────────────────────────────────────────────────────
+function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
+function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+
 // ── 날짜 헬퍼 (로컬 시간 기준, 한국 시간대 정확) ──────────────
 function localDateStr(d) {
   d = d || new Date();
@@ -644,4 +648,5 @@ loadData(currentDate);
 </script>
 </body>
 </html>
+
 

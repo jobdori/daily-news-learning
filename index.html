@@ -725,21 +725,33 @@ function renderLearning() {
     });
   }
 
-  if (L.challenge) {
-    const ch = L.challenge;
-    h += '<div class="section-label" style="margin-top:22px;">영작 챌린지 — Writing Challenge</div>';
-    h += '<div class="challenge-card">';
-    h += '<div class="challenge-q">아래 문장을 영어로 작성해보세요</div>';
-    h += '<div class="challenge-ko">' + esc(ch.korean) + '</div>';
-    h += '<textarea class="challenge-input" id="challengeInput" placeholder="여기에 영어로 작성하세요..."></textarea>';
-    h += '<div class="submit-row">';
-    h += '<button class="submit-btn" id="submitBtn" onclick="submitAnswer()">Claude에게 피드백 받기 ↗</button>';
-    h += '<button class="ans-reveal-btn" onclick="toggleAnswer(this)">모범 답안 보기 ▾</button>';
-    h += '<span class="loading-msg" id="loadingMsg">Claude가 검토 중...</span>';
-    h += '</div>';
-    h += '<div class="answer-box" id="answerBox"><div class="answer-sentence">' + esc(ch.answer) + '</div><div class="answer-explain">' + esc(ch.explanation) + '</div></div>';
-    h += '<div class="fb-box" id="fbBox"></div>';
-    h += '</div>';
+  // challenges: 배열(신규) 또는 단일 객체(구버전 데이터) 모두 지원
+  const challenges = L.challenges
+    ? L.challenges
+    : (L.challenge ? [Object.assign({ level: '챌린지' }, L.challenge)] : []);
+
+  if (challenges.length) {
+    const levelColors = { '초급': '#22c55e', '중급': '#f59e0b', '고급': '#ef4444', '실전': '#8b5cf6' };
+    h += '<div class="section-label" style="margin-top:22px;">✏️ 영작 챌린지 — Writing Challenge</div>';
+    h += '<div class="section-hint">난이도별 4문제 — 직접 써보고 모범 답안과 비교하세요</div>';
+    challenges.forEach((ch, i) => {
+      const color = levelColors[ch.level] || '#6b7280';
+      h += '<div class="challenge-card" style="margin-bottom:14px;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+      h += '<span style="background:' + color + ';color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;">' + esc(ch.level || ('문제 ' + (i+1))) + '</span>';
+      h += '<span style="font-size:12px;color:#6b7280;">아래 문장을 영어로 작성해보세요</span>';
+      h += '</div>';
+      h += '<div class="challenge-ko">' + esc(ch.korean) + '</div>';
+      h += '<textarea class="challenge-input" id="cInput-' + i + '" placeholder="여기에 영어로 작성하세요..."></textarea>';
+      h += '<div class="submit-row">';
+      h += '<button class="submit-btn" id="cSubmit-' + i + '" onclick="submitAnswer(' + i + ')">Claude에게 피드백 받기 ↗</button>';
+      h += '<button class="ans-reveal-btn" onclick="toggleAnswer(this)">모범 답안 보기 ▾</button>';
+      h += '<span class="loading-msg" id="cLoading-' + i + '" style="display:none;">Claude가 검토 중...</span>';
+      h += '</div>';
+      h += '<div class="answer-box"><div class="answer-sentence">' + esc(ch.answer) + '</div><div class="answer-explain">' + esc(ch.explanation) + '</div></div>';
+      h += '<div class="fb-box" id="cFb-' + i + '"></div>';
+      h += '</div>';
+    });
   }
 
   panel.innerHTML = h;
@@ -757,11 +769,12 @@ function toggleAnswer(btn) {
   btn.textContent = box.classList.contains('show') ? '모범 답안 닫기 ▴' : '모범 답안 보기 ▾';
 }
 
-async function submitAnswer() {
-  const input = document.getElementById('challengeInput');
-  const submitBtn = document.getElementById('submitBtn');
-  const loadingMsg = document.getElementById('loadingMsg');
-  const fbBox = document.getElementById('fbBox');
+async async function submitAnswer(idx) {
+  idx = idx || 0;
+  const input     = document.getElementById('cInput-'   + idx);
+  const submitBtn = document.getElementById('cSubmit-'  + idx);
+  const loadingMsg= document.getElementById('cLoading-' + idx);
+  const fbBox     = document.getElementById('cFb-'      + idx);
   const userAnswer = input.value.trim();
 
   if (!userAnswer) {
@@ -775,8 +788,13 @@ async function submitAnswer() {
   loadingMsg.style.display = 'inline';
   fbBox.className = 'fb-box';
 
+  const L = data.learning || {};
+  const challenges = L.challenges
+    ? L.challenges
+    : (L.challenge ? [Object.assign({ level: '챌린지' }, L.challenge)] : []);
+  const ch = challenges[idx] || challenges[0];
+
   try {
-    const ch = data.learning.challenge;
     const res = await fetch(CONFIG.FEEDBACK_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
